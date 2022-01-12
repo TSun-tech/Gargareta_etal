@@ -1,4 +1,3 @@
 # Gargareta_etal
-The repository contains analysis pipelines for Gargareta et al, 2022 manuscript.
-
-The corresponding scripts will be complete with uploading soon after the cross-check of code annotaitons.
+The repository contains analysis pipelines for Gargareta et al., 2022 manuscript.
+Additional scripts will be uploaded upon cross-checking of code annotations.
