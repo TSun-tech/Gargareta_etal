@@ -1,0 +1,125 @@
+#2020Oct05, Ting Sun
+#merged human oligodendrocyte scRNA-seq object
+#betch effect correction by 3 seurat documented workflows
+#batch effect detected under different studies
+#only Schrimmer dataset is correcrted based on patient ID
+#this script focus on applying SCTransform CCA for correction
+
+#run under sc_env
+
+#for scRNA-seq objects
+library(Seurat)
+library(dplyr)
+library(Matrix)
+library(abind)
+library(sctransform)
+
+#for parallelization
+library(future)
+library(future.apply)
+
+#for visualization
+library(cowplot)
+library(ggplot2)
+
+#for DGE analysis
+library(DESeq2)
+library(MAST)
+library(patchwork)
+library(pheatmap)
+
+
+
+#normally unnecessary, for loading sparse matrix
+#library(DropSeq.util)
+
+seu<-readRDS("/media/tsun/Data/Tsun/Ting/DAO_paper/rds/HUMAN/2020_scRNA_HUMAN_Oligo_merged_UMAPembedded.rds")
+
+DimPlot(seu, reduction = "umap", group.by = "Study")
+DimPlot(seu, reduction = "umap", group.by = "Patient_ID", label = TRUE)+NoLegend()
+DimPlot(seu, reduction = "umap", group.by = "Tissue")
+DimPlot(seu, reduction = "umap", group.by = "Platform")
+DimPlot(seu, reduction = "umap", group.by = "Age")
+DimPlot(seu, reduction = "umap", group.by = "CellType")
+DimPlot(seu, reduction = "umap", group.by = "Condition")
+
+#batch effect is strongly introduced by different studies
+
+seu
+
+head(seu@meta.data)
+
+seu@meta.data$batch_effect<-seu@meta.data$Study
+
+unique(seu@meta.data$Study)
+unique(seu@meta.data$Patient_ID)
+
+table(seu@meta.data$Study)
+
+position<-which(seu@meta.data$Study=="Schrimer2019")
+
+length(position)
+
+seu@meta.data$batch_effect[position]<-seu@meta.data$Patient_ID[position]
+
+unique(seu@meta.data$batch_effect)
+
+table(seu@meta.data$Patient_ID, seu@meta.data$Study)
+
+#####################################
+#CCA-MNN workflow
+seu.list<-SplitObject(seu, split.by = "batch_effect")
+
+seu.list
+
+length(seu.list)
+
+for (i in c(1:length(seu.list))) {
+    seu.list[[i]] <- SCTransform(seu.list[[i]], verbose = TRUE)
+    gc()
+}
+
+#help(SCTransform)
+
+seu.list
+names(seu.list)
+
+saveRDS(seu.list,"/media/tsun/Data/Tsun/Ting/DAO_paper/rds/HUMAN/human_SCT/Study+SchrimerPatientID/2020_scRNA_HUMAN_Oligo_StudyAndSchrimerPatientID_SCTlist.rds")
+
+seu.features <- SelectIntegrationFeatures(object.list = seu.list, nfeatures = 3000)
+seu.list <- PrepSCTIntegration(object.list = seu.list, anchor.features = seu.features)
+
+#reference_dataset <- which(names(seu.list) == "Saunders2018")
+
+seu.anchors <- FindIntegrationAnchors(object.list = seu.list, normalization.method = "SCT", 
+                                        anchor.features = seu.features)
+
+saveRDS(seu.anchors,"/media/tsun/Data/Tsun/Ting/DAO_paper/rds/HUMAN/human_SCT/Study+SchrimerPatientID/2020_scRNA_HUMAN_Oligo_StudyAndSchrimerPatientID_SCTanchors.rds")
+
+
+
+seu.integrated <- IntegrateData(anchorset = seu.anchors, normalization.method = "SCT")
+
+seu.integrated <- RunPCA(object = seu.integrated, verbose = FALSE)
+ElbowPlot(seu.integrated, ndims = 50)
+
+seu.integrated <- RunUMAP(object = seu.integrated, dims = 1:30)
+
+#check for correction
+DimPlot(seu.integrated, reduction = "umap", group.by = "Study")
+DimPlot(seu.integrated, reduction = "umap", group.by = "Patient_ID", label = TRUE)+NoLegend()
+DimPlot(seu.integrated, reduction = "umap", group.by = "Tissue")
+DimPlot(seu.integrated, reduction = "umap", group.by = "Platform")
+DimPlot(seu.integrated, reduction = "umap", group.by = "Age")
+DimPlot(seu.integrated, reduction = "umap", group.by = "CellType")
+DimPlot(seu.integrated, reduction = "umap", group.by = "Condition")
+
+#final check for object information
+seu.integrated
+
+saveRDS(seu.integrated,"/media/tsun/Data/Tsun/Ting/DAO_paper/rds/HUMAN/2020_scRNA_HUMAN_Oligo_studyBE_SCT.rds")
+
+#highlight myelin marker genes
+
+
+
